@@ -1,0 +1,29 @@
+{
+  "$schema": "https://developer.joomla.org/schemas/json-schema/web_assets.json",
+  "name": "mod_virtuemart_zsearchsphinx",
+  "version": "1.0.0",
+  "description": "Hromadne pridavani do kosiku",
+  "license": "GPL-2.0-or-later",
+ "assets": [
+    {
+      "name": "mod_virtuemart_zsearchsphinx.search",
+      "type": "script",
+      "uri": "mod_virtuemart_zsearchsphinx/search.js",
+      "dependencies": [
+        "core",
+        "messages"
+      ],
+      "attributes": {
+        "type": "module"
+      },
+      "version": "1.1.0"
+    },
+     {
+      "name": "mod_virtuemart_zsearchsphinx.style",
+      "type": "style",
+      "uri": "mod_virtuemart_zsearchsphinx/style.css",
+      "version": "1.0.0"
+    }
+  ]
+  
+}

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="module" client="site" method="upgrade">
+    <name>ZSearchSphinx</name>
+    <author>Zabba</author>
+    <version>2.0.0</version>
+    <description>A simple search module.</description>
+    <license>GNU General Public License version 2 or later; see LICENSE.txt</license>
+    <namespace path="src">Zabba\Module\ZSearchSphinx</namespace>
+    <files>
+        <folder module="mod_virtuemart_zsearchsphinx">services</folder>
+        <folder>src</folder>
+        <folder>tmpl</folder>
+        <folder>language</folder>
+        <folder>sql</folder>
+        <filename>index.html</filename>
+        <filename>helper.php</filename>
+    </files>
+    <media destination="mod_virtuemart_zsearchsphinx" folder="media">
+        <filename>joomla.asset.json</filename>
+        <folder>css</folder>
+        <folder>js</folder>
+    </media>
+    <languages>
+      <language tag="en-GB">language/en-GB/mod_virtuemart_zsearchsphinx.ini</language>
+      <language tag="cs-CZ">language/cs-CZ/mod_virtuemart_zsearchsphinx.ini</language>
+    </languages>
+
+        <install>
+     <sql>
+	     <file driver="mysql" charset="utf8">sql/mysql/install/install.mysql.utf8.sql</file>
+     </sql>
+    </install>
+
+    <uninstall>
+     <sql>
+	     <file driver="mysql" charset="utf8">sql/mysql/uninstall/uninstall.mysql.utf8.sql</file>
+     </sql>
+    </uninstall>
+    <config>
+        <fields name="params">
+            <fieldset name="basic">
+                <field
+                    name="obchod"
+                    type="list"
+                    label="Zvolte použití modulu ">
+                    <option value="1">Velkoobchod</option>
+                    <option value="2">Maloobchod</option>
+                </field>
+                <field
+                    name="velkoobchod_id"
+                    type="usergrouplist"
+                    label="Zadejte id velkoobchodní skupiny">
+                </field>
+            </fieldset>
+        </fields>
+    </config>
+</extension>
