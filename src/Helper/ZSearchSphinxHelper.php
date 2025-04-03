@@ -87,6 +87,7 @@ class ZSearchSphinxHelper
     $input = Factory::getApplication()->getInput();
     if ($input -> exists('search_box'))
     {
+        $obchodParam = $input->get('obchodParam','2','STRING'); //velkoobchod = 1, maloobchod = 2
         $query  = $input->get('search_box', '', 'string');
         if(strlen($query)<4){$query='musiszadattriznaky';}
         $docs = array();
@@ -150,16 +151,21 @@ class ZSearchSphinxHelper
         $options = self::pripojDatabazi('joomla');
         $database = new DatabaseFactory();
         $db = $database->getDriver('mysqli', $options);
-            $user_group =$db->getQuery(true);
-            $user_group
+            if  ($obchodParam==='2'){
+                $row_user_group[0]=0;
+            }
+            else{
+                $user_group =$db->getQuery(true);
+                $user_group
                     ->select ($db->quoteName ('virtuemart_shoppergroup_id'))
                     ->from ($db->quoteName ('#__virtuemart_vmuser_shoppergroups'))
                    ->where ($db->quoteName('virtuemart_user_id'). '=' .$userId);
-            $db->setQuery($user_group);
-            $row_user_group = $db->loadRow();
-            if(!$row_user_group)
-            {
-                $row_user_group[0]=5;
+                $db->setQuery($user_group);
+                $row_user_group = $db->loadRow();
+                if(!$row_user_group)
+                {
+                    $row_user_group[0]=5;
+                }
             }
             $q = $db->getQuery(true);
             $q

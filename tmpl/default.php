@@ -17,6 +17,7 @@ $language->load('mod_virtuemart_zsearchsphinx', JPATH_BASE . '/modules/mod_virtu
 ?>
 
     <?php
+$obchodParam = $params->get('obchod', '2', 'STRING');  //velkoobchod = 1, maloobchod = 2
 $action_form = JUri::root() .'index.php/obchod/';
 $input = Factory::getApplication()->getInput()
 ?>
@@ -103,8 +104,8 @@ $input = Factory::getApplication()->getInput()
         </div>
   	<?php
         $velkoobchod = $params->get('velkoobchod_id','','STRING');
-        $obchod = $params->get('obchod', '2', 'STRING');  //velkoobchod = 1, maloobchod = 2
-        if(($obchod ==='1' AND (Factory::getUser()->groups[(int)$velkoobchod]===(int)$velkoobchod)) OR $obchod ==='2') {
+//        $obchod = $params->get('obchod', '2', 'STRING');  //velkoobchod = 1, maloobchod = 2
+        if(($obchod ==='1' AND (Factory::getUser()->groups[(int)$velkoobchod]===(int)$velkoobchod)) OR $obchodParam ==='2') {
         ?>
             <?= "<input class='quantity-input' type='number' name='quantity[]' value=".$doc['min_order_level']." step=".$doc['step_order_level'].">"?> 
             <input type="submit" name="addtocart" class="btn btn-primary" value="Do košíku" title="Do košíku">
