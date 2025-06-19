@@ -32,7 +32,7 @@ class ModVirtuemartZsearchsphinxHelper
             $stmt
                 ->select($db->quoteName("product_name"))
                 ->from($db->quoteName("#__sphinx_test1"))
-                ->where("MATCH"."('".$query."')"." ORDER BY product_in_stock DESC LIMIT  0,10 OPTION ranker=sph04");
+                ->where("MATCH"."(".$db->quote($query).")"." ORDER BY product_in_stock DESC LIMIT  0,10 OPTION ranker=sph04");
 
             $db->setQuery($stmt);
             $results = $db->loadObjectList();
