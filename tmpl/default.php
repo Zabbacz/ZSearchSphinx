@@ -1,4 +1,4 @@
-<?php 
+    <?php 
 // No direct access
 defined('_JEXEC') or die('Restricted access');
 
@@ -7,6 +7,7 @@ use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 use Zabba\Module\ZSearchSphinx\Site\Helper\ZSearchSphinxHelper;
 
+$app = Factory::getApplication();
 $document = $app->getDocument();
 $wa = $document->getWebAssetManager();
 $wa->getRegistry()->addExtensionRegistryFile('mod_virtuemart_zsearchsphinx');
@@ -99,9 +100,18 @@ $input = Factory::getApplication()->getInput()
         <?='<strong>'.Text::_('MOD_VIRTUEMART_ZSEARCHSPHINX_AVAILABILITY').$doc['product_availability'].'</strong>' ?>
         <br />
         <br />
+	<?php
+	    if ($obchodParam === '1'){
+	?>
         <div class="cena">
-            <?= "<i>".Text::_('MOD_VIRTUEMART_ZSEARCHSPHINX_PRICE').$doc['product_price']." Kč bez DPH/ks </i>"?>    
+            <?= "<i>".Text::_('MOD_VIRTUEMART_ZSEARCHSPHINX_PRICE').$doc['product_price']." Kč bez DPH/ks</i>"?>    
         </div>
+        <?php } else {?>
+            <div class="cena mt-2 mb-2">
+            <i><?php echo htmlspecialchars(Text::_('MOD_VIRTUEMART_ZSEARCHSPHINX_PRICE') . ' ' . round($doc['s_dph'], 0). ' Kč /ks', ENT_QUOTES, 'UTF-8'); ?></i>
+            </div>
+        <?php }?>
+	
   	<?php
         $velkoobchod = $params->get('velkoobchod_id','','STRING');
 //        $obchod = $params->get('obchod', '2', 'STRING');  //velkoobchod = 1, maloobchod = 2
