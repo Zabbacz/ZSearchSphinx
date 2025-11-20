@@ -12,11 +12,82 @@ use Joomla\Database\DatabaseFactory;
 
 class ZSearchSphinxHelper
 {
+  /** presunoto do samostatneho helpru v root - jen tam hleda com_ajax
+      public function getAjax() 
+   
+    {
+        $input = Factory::getApplication()->getInput();
+        if ($input -> exists('query'))
+        {
+            $q  = $input->post->get('query', '', 'string');
+            $condition = preg_replace('/[^A-Za-z0-9\- ]/', '', $q);
+            $options = self::pripojDatabazi('sphinx');
+            $database = new DatabaseFactory();
+            $db = $database->getDriver('mysql', $options);
+            $stmt = $db->getQuery(true);
+            $aq = explode(' ',$q);
+            if(strlen($aq[count($aq)-1])<3)
+            {
+        	$query = $q;
+            }
+            else
+            {
+                $query = $q.'*';
+            }
+            $stmt
+                ->select($db->quoteName("product_name"))
+                ->from($db->quoteName("#__sphinx_eu"))
+                ->where("MATCH"."('".$query."')"." ORDER BY product_in_stock DESC LIMIT  0,10 OPTION ranker=sph04");
+
+            $db->setQuery($stmt);
+            $results = $db->loadObjectList();
+            $replace_string = '<b>'.$condition.'</b>';
+            if($results)
+            {
+                foreach($results as $row)
+                {
+                    $data[] = array(
+                        'product_name'		=>	str_ireplace($condition, $replace_string, $row->product_name)
+                    );
+                }
+            echo json_encode($data);
+            }
+            else{
+                echo json_encode('');
+            }
+        }
+        $input = Factory::getApplication()->getInput()->json;
+        if ($input -> exists('search_query'))
+        {
+            $post_data = json_decode(file_get_contents('php://input'), true);
+            $data = array(
+		':search_query'		=>	$post_data['search_query']
+            );
+            $options = self::pripojDatabazi('joomla');
+            $database = new DatabaseFactory();
+            $db = $database->getDriver('mysqli', $options);
+            $query = $db->getQuery(true);
+            $query
+                ->insert($db->quoteName('#__zsphinx_recent_search'))
+                ->columns($db->quoteName('search_query'))
+                ->values('"'.$data[':search_query'].'"');
+            $db->setQuery($query);
+            $db->execute();        
+            $output = array(
+		'success'	=>	true
+            );
+            echo json_encode($output);
+
+        }
+    }
+*/
+    
     public function getSearch()
     {
     $input = Factory::getApplication()->getInput();
     if ($input -> exists('search_box'))
     {
+        $obchodParam = $input->get('obchodParam','2','STRING'); //velkoobchod = 1, maloobchod = 2
         $query  = $input->get('search_box', '', 'string');
         if(strlen($query)<4){$query='musiszadattriznaky';}
         $docs = array();
@@ -56,8 +127,8 @@ class ZSearchSphinxHelper
         $stmt = $db->getQuery(true);
         $stmt
             ->select ($db->quoteName('id'))
-            ->from($db->quoteName('#__sphinx_test1'))
-            ->where("MATCH"."(".$db->quote($query).")"." ORDER BY product_in_stock DESC LIMIT "  . $start .",". $offset." OPTION ranker=sph04,field_weights=(product_name=100)");
+            ->from($db->quoteName('#__sphinx_eu'))
+            ->where("MATCH"."('".$query."')"." ORDER BY product_in_stock DESC LIMIT "  . $start .",". $offset." OPTION ranker=sph04,field_weights=(product_name=100)");
         $db->setQuery($stmt);
         $rows = $db->loadAssocList();
         $meta=$db->setQuery('show meta');
@@ -80,16 +151,21 @@ class ZSearchSphinxHelper
         $options = self::pripojDatabazi('joomla');
         $database = new DatabaseFactory();
         $db = $database->getDriver('mysqli', $options);
-            $user_group =$db->getQuery(true);
-            $user_group
+            if  ($obchodParam==='2'){
+                $row_user_group[0]=0;
+            }
+            else{
+                $user_group =$db->getQuery(true);
+                $user_group
                     ->select ($db->quoteName ('virtuemart_shoppergroup_id'))
                     ->from ($db->quoteName ('#__virtuemart_vmuser_shoppergroups'))
                    ->where ($db->quoteName('virtuemart_user_id'). '=' .$userId);
-            $db->setQuery($user_group);
-            $row_user_group = $db->loadRow();
-            if(!$row_user_group)
-            {
-                $row_user_group[0]=5;
+                $db->setQuery($user_group);
+                $row_user_group = $db->loadRow();
+                if(!$row_user_group)
+                {
+                    $row_user_group[0]=5;
+                }
             }
             $q = $db->getQuery(true);
             $q
@@ -145,8 +221,8 @@ class ZSearchSphinxHelper
         $stmt2 = $db->getQuery(true);
         $stmt2
             ->select ($db->quoteName('mf_name'))
-            ->from($db->quoteName('#__sphinx_test1'))
-            ->where("MATCH"."(".$db->quote($query_znacky).")"." GROUP BY mf_name LIMIT  0,1000 OPTION ranker=sph04");
+            ->from($db->quoteName('#__sphinx_eu'))
+            ->where("MATCH"."('".$query_znacky."')"." GROUP BY mf_name LIMIT  0,1000 OPTION ranker=sph04");
         $db->setQuery($stmt2);
         $manufacturers = $db->loadColumn();
         return $manufacturers;
