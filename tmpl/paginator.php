@@ -1,73 +1,71 @@
 <?php
-
 defined('_JEXEC') or die('Restricted access');
 
-$total = $docs[count((array) ($docs))]['total'];
-//$total = $docs['total'];
-$offset = $docs[count((array) ($docs))]['offset'];
-//$offset = $docs['offset'];
-$pageCount = ceil($total/$offset);
+if (empty($docs) || !is_array($docs)) {
+    return;
+}
+
+// Poslední prvek v $docs má být total_array podle helperu
+$lastIndex = count($docs) - 1;
+if ($lastIndex < 0 || !isset($docs[$lastIndex]['total_found'])) {
+    return;
+}
+
+$summary = $docs[$lastIndex];
+$total = (int) ($summary['total'] ?? 0);
+$offset = (int) ($summary['offset'] ?? 24);
+$current = (int) ($summary['current'] ?? 1);
+$query = isset($summary['query']) ? urlencode($summary['query']) : '';
+$pageCount = ($offset > 0) ? (int) ceil($total / $offset) : 0;
 $url = 'obchod/';
-if ($pageCount): 
-$query =  $docs[count((array) ($docs))]['query'];
-//$query =  $docs['query'];
-$current = $docs[count((array) ($docs))]['current'];
-//$current = $docs['current'];
-$start = 0;
-if($current >=2) {
-    $previous = $current -1;
+
+if ($pageCount <= 1) {
+    return;
 }
-if($current+1<=$pageCount) {
-    $next = $current+1;
-}
+
 $range = 3;
-$first = 0;
-$last = $pageCount;
+$firstPage = 1;
+$lastPage = $pageCount;
+$previous = ($current > 1) ? $current - 1 : null;
+$next = ($current < $pageCount) ? $current + 1 : null;
 ?>
 <div class="paginationControl">
-<!-- First page link -->
-<?php if (isset($previous)): ?>
-  <a href="<?php echo $url;?>?search_box=<?php echo $query;?>&start =<?php echo $first*$offset;?>">
-    <i class="icon-step-backward"><<</i></a> |
-<?php else: ?>
-  <i class="icon-step-backward disabled"></i></a> |
-<?php endif; ?>
-<!-- Previous page link -->
-<?php if (isset($previous)): ?>
-  <a href="<?php echo $url;?>?search_box=<?php echo $query;?>&start=<?php echo ($previous-1)*$offset;?>">
-    <i class="icon-arrow-left"></i></a> |
-<?php else: ?>
-  <span class="disabled"><i class="icon-arrow-left"></i></span> |
-<?php endif; ?>
-
-<!-- Numbered page links -->
-<?php for($page = ($current-$range);$page < ($current+$range+1);$page++): ?>
- <?php if ($page > 0 && $page <= $pageCount): ?>
-  <?php if ($page != $current): ?>
-    <a href="<?php echo $url;?>?search_box=<?php echo $query;?>&start=<?php echo ($page-1)*$offset;?>">
-        <?php echo $page; ?>
+  <!-- First page link -->
+  <?php if ($previous): ?>
+    <a href="<?php echo $url; ?>?search_box=<?php echo $query; ?>&start=<?php echo ($firstPage - 1) * $offset; ?>">
+      <i>◀◀</i>
     </a> |
-  <?php else: ?>
-    <?php echo $page; ?> |
   <?php endif; ?>
-  <?php endif;?>
-<?php endfor; ?>
 
-<!-- Next page link -->
-<?php if (isset($next)): ?>
-  <a href="<?php echo $url;?>?search_box=<?php echo $query;?>&start=<?php echo ($next-1)*$offset;?>">
-   <i class="icon-arrow-right"></i></a>|
-<?php else: ?>
-  <span class="disabled"><i class="icon-arrow-right"></i></span> |
-<?php endif; ?>
+  <!-- Previous page link -->
+  <?php if ($previous): ?>
+    <a href="<?php echo $url; ?>?search_box=<?php echo $query; ?>&start=<?php echo ($previous - 1) * $offset; ?>">
+      <i>◀</i>
+    </a> |
+  <?php endif; ?>
 
-<!-- Last page link -->
-<?php if (isset($next)): ?>
-  <a href="<?php echo $url;?>?search_box=<?php echo $query;?>&start=<?php echo ($last-1)*$offset?>">
-    <i class="icon-step-forward">>></i>
-  </a>
-<?php else: ?>
- <i class="icon-step-forward disabled"></i>
-<?php endif; ?>
+  <!-- Numbered page links -->
+  <?php for ($page = max(1, $current - $range); $page <= min($pageCount, $current + $range); $page++): ?>
+    <?php if ($page !== $current): ?>
+      <a href="<?php echo $url; ?>?search_box=<?php echo $query; ?>&start=<?php echo ($page - 1) * $offset; ?>">
+        <?php echo $page; ?>
+      </a> |
+    <?php else: ?>
+      <strong><?php echo $page; ?></strong> |
+    <?php endif; ?>
+  <?php endfor; ?>
+
+  <!-- Next page link -->
+  <?php if ($next): ?>
+    <a href="<?php echo $url; ?>?search_box=<?php echo $query; ?>&start=<?php echo ($next - 1) * $offset; ?>">
+      <i>▶</i>
+    </a> |
+  <?php endif; ?>
+
+  <!-- Last page link -->
+  <?php if ($next): ?>
+    <a href="<?php echo $url; ?>?search_box=<?php echo $query; ?>&start=<?php echo ($lastPage - 1) * $offset; ?>">
+      <i>▶▶</i>
+    </a>
+  <?php endif; ?>
 </div>
-<?php endif; ?>

@@ -10,6 +10,7 @@
       "type": "script",
       "uri": "mod_virtuemart_zsearchsphinx/search.js",
       "dependencies": [
+        "jquery",
         "core",
         "messages"
       ],

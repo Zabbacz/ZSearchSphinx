@@ -51,6 +51,22 @@
                     type="usergrouplist"
                     label="Zadejte id velkoobchodní skupiny">
                 </field>
+		<field 
+		    name="stock" 
+		    type="radio" 
+		    default="0" 
+		    label="Zobrazovat množstí skladem" 
+		    description="Zvolte, zda se bude u produktů zobrazovat množství skladem">
+			<option value="1">ANO</option>
+			<option value="0">NE</option>
+		</field>
+		<field
+		    name="sphinx_table"
+		    type="text"
+		    default=""
+		    label="Nazev tabulky sphinx" 
+		    description="Zadejte nazev tabulky sphinx"
+		    size="10" />
             </fieldset>
         </fields>
     </config>

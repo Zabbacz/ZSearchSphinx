@@ -5,283 +5,340 @@ namespace Zabba\Module\ZSearchSphinx\Site\Helper;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
-use Joomla\Database\DatabaseInterface;
 use Joomla\Database\DatabaseFactory;
-//use Joomla\Registry\Registry;
-//use Joomla\CMS\Router\Route;
 
 class ZSearchSphinxHelper
 {
-  /** presunoto do samostatneho helpru v root - jen tam hleda com_ajax
-      public function getAjax() 
-   
+    public function getSearch($params): array
     {
-        $input = Factory::getApplication()->getInput();
-        if ($input -> exists('query'))
-        {
-            $q  = $input->post->get('query', '', 'string');
-            $condition = preg_replace('/[^A-Za-z0-9\- ]/', '', $q);
-            $options = self::pripojDatabazi('sphinx');
-            $database = new DatabaseFactory();
-            $db = $database->getDriver('mysql', $options);
-            $stmt = $db->getQuery(true);
-            $aq = explode(' ',$q);
-            if(strlen($aq[count($aq)-1])<3)
-            {
-        	$query = $q;
-            }
-            else
-            {
-                $query = $q.'*';
-            }
-            $stmt
-                ->select($db->quoteName("product_name"))
-                ->from($db->quoteName("#__sphinx_eu"))
-                ->where("MATCH"."('".$query."')"." ORDER BY product_in_stock DESC LIMIT  0,10 OPTION ranker=sph04");
+	$input = Factory::getApplication()->getInput();
 
-            $db->setQuery($stmt);
-            $results = $db->loadObjectList();
-            $replace_string = '<b>'.$condition.'</b>';
-            if($results)
-            {
-                foreach($results as $row)
-                {
-                    $data[] = array(
-                        'product_name'		=>	str_ireplace($condition, $replace_string, $row->product_name)
-                    );
-                }
-            echo json_encode($data);
-            }
-            else{
-                echo json_encode('');
-            }
-        }
-        $input = Factory::getApplication()->getInput()->json;
-        if ($input -> exists('search_query'))
-        {
-            $post_data = json_decode(file_get_contents('php://input'), true);
-            $data = array(
-		':search_query'		=>	$post_data['search_query']
-            );
-            $options = self::pripojDatabazi('joomla');
-            $database = new DatabaseFactory();
-            $db = $database->getDriver('mysqli', $options);
-            $query = $db->getQuery(true);
-            $query
-                ->insert($db->quoteName('#__zsphinx_recent_search'))
-                ->columns($db->quoteName('search_query'))
-                ->values('"'.$data[':search_query'].'"');
-            $db->setQuery($query);
-            $db->execute();        
-            $output = array(
-		'success'	=>	true
-            );
-            echo json_encode($output);
+	if (!$input->exists('search_box')) {
+	    return [];
+	}
+        $obchodParam = $params->get('obchodParam', '2', 'STRING');
+	$query       = $input->get('search_box', '', 'STRING');
+	$znacky      = $input->get('znacky_search', '', 'STRING');
+	$sphinxTable = $params->get('sphinx_table', '', 'STRING');
 
-        }
+	[$start, $offset, $current] = $this->getPagination($input);
+	$fullQuery = $this->prepareQuery($query, $znacky);
+
+	$dbSphinx = $this->getSphinxConnection();
+	if (!$dbSphinx) {
+	    return [];
+	}
+
+	[$ids, $meta] = $this->searchSphinx($dbSphinx, $fullQuery, $start, $offset, $sphinxTable);
+
+	$totalInfo = $this->formatTotalInfo($meta, $start, $offset, $current, $fullQuery);
+
+	if (empty($ids)) {
+	    return [$totalInfo];
+	}
+
+	$dbJoomla = $this->getJoomlaConnection();
+	if (!$dbJoomla) {
+	    return [$totalInfo];
+	}
+
+	$user     = Factory::getApplication()->getIdentity();
+	$userId   = isset($user->id) ? (int)$user->id : 0;
+	$shopperGroupId  = $this->getUserGroup($dbJoomla, $userId, $obchodParam);
+
+	$products = $this->fetchProducts($dbJoomla, $ids, $shopperGroupId);
+
+	$docs = [];
+
+	foreach ($ids as $id) {
+	    $docs[] = $products[$id] ?? null;
+	}
+
+	$docs[] = $totalInfo;
+
+	return $docs;
     }
-*/
+
+    private function prepareQuery(string $query, string $znacky): string
+    {
+	if (mb_strlen($query) < 4) {
+	    $query = 'musiszadattriznaky';
+	}
+
+	$full = trim($query . ' ' . $znacky);
+	return self::sanitizeSphinxQuery($full);
+    }
     
-    public function getSearch()
+    private function getPagination($input): array
     {
-    $input = Factory::getApplication()->getInput();
-    if ($input -> exists('search_box'))
+	$offset = 24;
+	$start  = (int)$input->get('start', 0, 'INT');
+	$current = (int)($start / $offset + 1);
+
+	return [$start, $offset, $current];
+    }
+    
+    private function getSphinxConnection()
     {
-        $obchodParam = $input->get('obchodParam','2','STRING'); //velkoobchod = 1, maloobchod = 2
-        $query  = $input->get('search_box', '', 'string');
-        if(strlen($query)<4){$query='musiszadattriznaky';}
-        $docs = array();
-        $offset = 24;
-        $current = 1;
-        $url = 'obchod/';
-        $app     = Factory::getApplication();
-        $user = $app->getIdentity();
-        $userId = $user->id;
-        $znacky_search = $input -> get('znacky_search','','string');
-        $query_order = '%';
-        if($znacky_search)
-        {
-            $text_db = '$db->quoteName';
-            $query_order = $znacky_search;
-        }
-        $query .= ' '.$query_order;
-        $query = (string) preg_replace('/[^\p{L}\d\s]/u', ' ', $query);
-        $query = trim($query);
-        $start  = $input->get('start', '0', 'INT');
-        $current = $start/$offset+1;
-        $options = self::pripojDatabazi('sphinx');
-        $database = new DatabaseFactory();
+	try {
+	    return (new DatabaseFactory())->getDriver('mysql', self::pripojDatabazi('sphinx'));
+	} catch (\Throwable $e) {
+	    Factory::getApplication()->enqueueMessage(
+		Text::sprintf('JLIB_DATABASE_ERROR_FUNCTION_FAILED', $e->getCode(), $e->getMessage()),
+		'warning'
+        )   ;
+	    return null;
+	}
+    }
+
+    private function searchSphinx($db, string $query, int $start, int $offset, string $sphinxTable): array
+    {
+	$table = '#__'.$sphinxTable;
+	$stmt = $db->getQuery(true)
+	    ->select('id')
+	    ->from($table)
+	    ->where("
+		MATCH('{$query}')
+		ORDER BY product_in_stock DESC
+		LIMIT {$start}, {$offset}
+		OPTION ranker=proximity_bm25
+	    ");
+	$db->setQuery($stmt);
+	$rows = $db->loadAssocList();
+
+	// Extract IDs
+	$ids = array_map(
+	    fn($r) => (int)$r['id'],
+	    $rows ?? []
+	);
+
+	// META
+	$db->setQuery('SHOW META');
+	$meta = $db->loadAssocList();
+
+	$map = [];
+	if ($meta) {
+	    foreach ($meta as $m) {
+		if (isset($m['Variable_name'], $m['Value'])) {
+		    $map[$m['Variable_name']] = $m['Value'];
+		}
+	    }
+	}
+
+	return [$ids, $map];
+    }
+
+    private function formatTotalInfo(array $meta, int $start, int $offset, int $current, string $query): array
+    {
+	return [
+	    'total'       => isset($meta['total']) ? (int)$meta['total'] : 0,
+	    'total_found' => isset($meta['total_found']) ? (int)$meta['total_found'] : 0,
+	    'offset'      => $offset,
+	    'current'     => $current,
+	    'start'       => $start,
+	    'query'       => $query
+	];
+    }
+
+    private function getJoomlaConnection()
+    {
+	try {
+	    return (new DatabaseFactory())->getDriver('mysqli', self::pripojDatabazi('joomla'));
+	} catch (\Throwable $e) {
+	    Factory::getApplication()->enqueueMessage(
+		Text::sprintf('JLIB_DATABASE_ERROR_FUNCTION_FAILED', $e->getCode(), $e->getMessage()),
+		'warning'
+	    );
+	    return null;
+	}
+    }
+
+    private function getUserGroup($db, int $userId, string $obchodParam): int
+    {
+	if ($obchodParam === '2') {
+	    return 0; // maloobchod
+	}
+
+	$q = $db->getQuery(true)
+	    ->select('virtuemart_shoppergroup_id')
+	    ->from('#__virtuemart_vmuser_shoppergroups')
+	    ->where('virtuemart_user_id = :uid')
+	    ->bind(':uid', $userId);
+
+	$db->setQuery($q);
+	$row = $db->loadRow();
+
+	return $row[0] ?? 5; // fallback
+    }
+
+    private function fetchProducts($db, array $ids, int $shopperGroupId): array
+    {
+	$idsList = implode(',', array_map('intval', $ids));
+
+	$published = 1;
+	// Main query
+	$q = $db->getQuery(true)
+	    ->select([
+		't1.virtuemart_product_id',
+		't1.product_name',
+		't3.product_in_stock',
+		't3.product_availability',
+		't3.product_params',
+		't2.virtuemart_category_id',
+		't4.product_price',
+
+		'(SELECT m.file_url
+		    FROM #__virtuemart_product_medias pm
+		    JOIN #__virtuemart_medias m 
+			ON m.virtuemart_media_id = pm.virtuemart_media_id
+		    WHERE pm.virtuemart_product_id = t1.virtuemart_product_id
+		    ORDER BY pm.ordering ASC
+		    LIMIT 1
+		) AS file_url',
+
+		'(SELECT calc.calc_value
+		    FROM #__virtuemart_calcs calc
+		    WHERE calc.virtuemart_calc_id = t4.product_tax_id
+		    LIMIT 1
+		) AS calc_value',
+
+		'(SELECT mc.mf_name
+		    FROM #__virtuemart_product_manufacturers pm
+		    JOIN #__virtuemart_manufacturers_cs_cz mc
+			ON mc.virtuemart_manufacturer_id = pm.virtuemart_manufacturer_id
+		    WHERE pm.virtuemart_product_id = t1.virtuemart_product_id
+		    LIMIT 1
+		) AS manufacturer',
+
+		'(SELECT pm.virtuemart_manufacturer_id
+		    FROM #__virtuemart_product_manufacturers pm
+		    WHERE pm.virtuemart_product_id = t1.virtuemart_product_id
+		    LIMIT 1
+		) AS manufacturer_id'
+	    ])
+
+	    ->from('#__virtuemart_products_cs_cz AS t1')
+	    ->join('INNER', '#__virtuemart_products AS t3 ON t1.virtuemart_product_id = t3.virtuemart_product_id')
+	    ->join('INNER', '#__virtuemart_product_prices AS t4 ON t1.virtuemart_product_id = t4.virtuemart_product_id')
+	    ->join('LEFT', '#__virtuemart_product_categories AS t2 ON t1.virtuemart_product_id = t2.virtuemart_product_id')
+
+	    ->where('t1.virtuemart_product_id IN (' . implode(',', $ids) . ')')
+	    ->where('t4.virtuemart_shoppergroup_id = :shopperGroup')
+	    ->where('t3.published = :published')
+
+	    ->bind(':shopperGroup', $shopperGroupId)
+	    ->bind(':published', $published);
+
+	$db->setQuery($q);
+	$rows = $db->loadAssocList();
+
+	$out = [];
+	foreach ($rows as $row) {
+	    $out[(int)$row['virtuemart_product_id']] = $this->formatProduct($row);
+	}
+
+	return $out;
+    }
+
+    private function formatProduct(array $row): array
+    {
+	$params = self::getBaleni($row['product_params']);
+
+	$price = round($row['product_price'], 2);
+	$sdph  = round($price * (1 + ($row['calc_value'] / 100)), 2);
+
+	return [
+	    'product_name'            => $row['product_name'],
+	    'virtuemart_product_id'   => (int)$row['virtuemart_product_id'],
+	    'virtuemart_category_id'  => $row['virtuemart_category_id'],
+	    'product_availability'    => $row['product_availability'],
+	    'product_price'           => $price,
+	    'file_url'                => $row['file_url'],
+	    'min_order_level'         => $params['min_order_level'] ?? 1,
+	    'step_order_level'        => $params['step_order_level'] ?? 1,
+	    's_dph'                   => $sdph,
+	    'manufacturer'            => $row['mf_name'],
+	    'manufacturer_id'         => $row['virtuemart_manufacturer_id'],
+	    'product_in_stock'        => $row['product_in_stock'],
+	];
+    }
+
+    
+    
+    public static function getManufacturers(?string $query_znacky = null, string $sphinxTable): array
+    {
+        $safeQuery = $query_znacky ? self::sanitizeSphinxQuery($query_znacky) : '';
         try {
-            $db = $database->getDriver('mysql', $options);
-//                $this->setDatabase($dbDriver);
-            } catch (\RuntimeException $exception) {
-                Factory::getApplication()->enqueueMessage(
-                        Text::sprintf('JLIB_DATABASE_ERROR_FUNCTION_FAILED', $e->getCode(), $e->getMessage()),
-                        'warning'
-                );
-            }
-            if (empty($db)) {
-                throw new \RuntimeException("Joomla did not return a database object.");
-            }
-          
-        $stmt = $db->getQuery(true);
-        $stmt
-            ->select ($db->quoteName('id'))
-            ->from($db->quoteName('#__sphinx_eu'))
-            ->where("MATCH"."('".$query."')"." ORDER BY product_in_stock DESC LIMIT "  . $start .",". $offset." OPTION ranker=sph04,field_weights=(product_name=100)");
-        $db->setQuery($stmt);
-        $rows = $db->loadAssocList();
-        $meta=$db->setQuery('show meta');
-        $meta = $db->loadAssocList();
-        foreach($meta as $m) 
-        {
-	    $meta_map[$m['Variable_name']] = $m['Value'];
+	    $database = new DatabaseFactory();
+	    $dbSphinx = $database->getDriver('mysql', self::pripojDatabazi('sphinx'));
+        } catch (\Throwable $e) {
+            Factory::getApplication()->enqueueMessage(
+                Text::sprintf('JLIB_DATABASE_ERROR_FUNCTION_FAILED', $e->getCode(), $e->getMessage()),
+                'warning'
+            );
 	}
-        $total_found = $meta_map['total_found'];
-        $total = $meta_map['total'];
-        $total_array = array('total'=> $total, 'total_found' => $total_found, 'offset' => $offset, 'current' => $current,'start' => $start, 'query' => $query);
-     	$ids = array();
-        $tmpdocs = array();
-        if (count($rows)> 0) 
-        {
-            foreach ($rows as  $v) 
-            {
-        		$ids[] =  $v['id'];
-            }
-        $options = self::pripojDatabazi('joomla');
-        $database = new DatabaseFactory();
-        $db = $database->getDriver('mysqli', $options);
-            if  ($obchodParam==='2'){
-                $row_user_group[0]=0;
-            }
-            else{
-                $user_group =$db->getQuery(true);
-                $user_group
-                    ->select ($db->quoteName ('virtuemart_shoppergroup_id'))
-                    ->from ($db->quoteName ('#__virtuemart_vmuser_shoppergroups'))
-                   ->where ($db->quoteName('virtuemart_user_id'). '=' .$userId);
-                $db->setQuery($user_group);
-                $row_user_group = $db->loadRow();
-                if(!$row_user_group)
-                {
-                    $row_user_group[0]=5;
-                }
-            }
-            $q = $db->getQuery(true);
-            $q
-                ->select ($db->quoteName (array('t1.virtuemart_product_id', 't3.product_in_stock','product_name', 'virtuemart_category_id', 'product_availability','product_price','file_url', 't3.product_params', 't7.calc_value', 't9.mf_name', 't9.virtuemart_manufacturer_id')))
-                ->from($db->quoteName('#__virtuemart_products_cs_cz','t1'))
-                ->join('INNER',$db->quoteName('#__virtuemart_product_prices','t4'). ' ON ' . $db->quoteName('t1.virtuemart_product_id') . ' = ' . $db->quoteName('t4.virtuemart_product_id'))    
-                ->join('INNER',$db->quoteName('#__virtuemart_products','t3'). ' ON ' . $db->quoteName('t1.virtuemart_product_id') . ' = ' . $db->quoteName('t3.virtuemart_product_id'))
-                ->join('INNER',$db->quoteName('#__virtuemart_product_medias','t5'). ' ON ' . $db->quoteName('t1.virtuemart_product_id') . ' = ' . $db->quoteName('t5.virtuemart_product_id'))    
-                ->join('INNER',$db->quoteName('#__virtuemart_medias','t6'). ' ON ' . $db->quoteName('t5.virtuemart_media_id') . ' = ' . $db->quoteName('t6.virtuemart_media_id'))
-                ->join('INNER',$db->quoteName('#__virtuemart_calcs','t7'). ' ON ' . $db->quoteName('t4.product_tax_id') . ' = ' . $db->quoteName('t7.virtuemart_calc_id'))
-                ->join('INNER',$db->quoteName('#__virtuemart_product_manufacturers','t8'). ' ON ' . $db->quoteName('t1.virtuemart_product_id') . ' = ' . $db->quoteName('t8.virtuemart_product_id'))
-                ->join('INNER',$db->quoteName('#__virtuemart_manufacturers_cs_cz','t9'). ' ON ' . $db->quoteName('t8.virtuemart_manufacturer_id') . ' = ' . $db->quoteName('t9.virtuemart_manufacturer_id'))
-                ->join('LEFT',$db->quoteName('#__virtuemart_product_categories','t2'). ' ON ' . $db->quoteName('t1.virtuemart_product_id') . ' = ' . $db->quoteName('t2.virtuemart_product_id'))
-                ->where($db->quoteName('t1.virtuemart_product_id'). ' IN '.'  (' . implode(",", $ids) . ')')
-                ->where($db->quoteName('t4.virtuemart_shoppergroup_id'). ' = '.$row_user_group[0]);
-            $db->setQuery ($q);
-            $q = $db->loadAssocList(); 
-            foreach ($q as $row) 
-            {
-                $parametry = self::getBaleni($row['product_params']);
-                $price = Round($row['product_price'],2);
-                $sdph = Round($price*(1+($row['calc_value']/100)),2);
-                $tmpdocs[$row['virtuemart_product_id']] = array(
-                    'product_name' => $row['product_name'], 
-                    'virtuemart_product_id' => $row['virtuemart_product_id'],
-                    'virtuemart_category_id' => $row['virtuemart_category_id'],
-                    'product_availability' => $row['product_availability'],
-                    'product_price' => $price,
-                    'file_url' => $row['file_url'],
-                    'min_order_level' => $parametry['min_order_level'],
-                    'step_order_level' => $parametry['step_order_level'],
-                    's_dph' => $sdph, 
-                    'manufacturer' => $row['mf_name'],
-                    'manufacturer_id' => $row['virtuemart_manufacturer_id'],
-                    'product_in_stock' => $row['product_in_stock'],);
-            } 
-            foreach ($ids as $id)
-            {
-                $docs[] = $tmpdocs[$id];
-            }
-            $last = count ($docs)+1;
-            $docs[$last]=$total_array;
-	}
-    }
-	return $docs;  
-    }
-
-    public static function getManufacturers($query_znacky = null)
-    {
-        $options = self::pripojDatabazi('sphinx');
-        $database = new DatabaseFactory();
-        $db = $database->getDriver('mysql', $options);
-        $stmt2 = $db->getQuery(true);
+        $stmt2 = $dbSphinx->getQuery(true);
+        $matchClause = "MATCH('{$safeQuery}')";
         $stmt2
-            ->select ($db->quoteName('mf_name'))
-            ->from($db->quoteName('#__sphinx_eu'))
-            ->where("MATCH"."('".$query_znacky."')"." GROUP BY mf_name LIMIT  0,1000 OPTION ranker=sph04");
-        $db->setQuery($stmt2);
-        $manufacturers = $db->loadColumn();
-        return $manufacturers;
-    
+            ->select($dbSphinx->quoteName('mf_name'))
+            ->from($dbSphinx->quoteName('#__'.$sphinxTable))
+            ->where($matchClause . " GROUP BY mf_name LIMIT 0,1000 OPTION ranker=proximity_bm25");
+        $dbSphinx->setQuery($stmt2);
+        $manufacturers = $dbSphinx->loadColumn();
+        return is_array($manufacturers) ? $manufacturers : [];
     }
 
-    public static function getBaleni($vstup) 
+    public static function getBaleni(?string $vstup): array
     {
         mb_internal_encoding("UTF-8");
-        $vystup = array();
-        if($vstup)
-        {
+        $vystup = [];
+        if ($vstup) {
             $delka = mb_strlen($vstup);
-            $podretezec = mb_strpos($vstup,':');
-            $nahrad = array(' ' => '');
-            $vstup_zprac = (mb_substr(strtr($vstup,$nahrad), $podretezec, $delka));
-            $cisla = explode('|', $vstup_zprac);
-            $i = 0; foreach ($cisla as $cislo):
-                $polozka = array(str_replace('"','',explode('=',($cisla[$i]))));
-                if(isset($polozka[0][1]))
-                {
-                    $key = $polozka[0][0];
-                    $value = $polozka[0][1];
+            $podretezec = mb_strpos($vstup, ':');
+            $nahrad = [' ' => ''];
+            $vstupZprac = mb_substr(strtr($vstup, $nahrad), $podretezec, $delka);
+            $cisla = explode('|', $vstupZprac);
+            foreach ($cisla as $cislo) {
+                $parts = explode('=', str_replace('"', '', $cislo), 2);
+                if (isset($parts[1])) {
+                    $key = $parts[0];
+                    $value = $parts[1];
                     $vystup[$key] = $value;
                 }
-            $i++;
-            endforeach;
+            }
+        } else {
+            $vystup['min_order_level'] = '1';
+            $vystup['step_order_level'] = '1';
         }
-        else
-        {
-            $vystup["min_order_level"] = "1";
-            $vystup["step_order_level"] = "1";
-
-        }   
-    return($vystup);
+        return $vystup;
     }
 
-    public static function pripojDatabazi($database) 
+    public static function pripojDatabazi(string $database): array
     {
-        $option = array();
-        switch ($database)
-        {
+        $option = [];
+        switch ($database) {
             case 'sphinx':
-                $option['driver']   = 'mysql';            // Database driver name
-                $option['host']     = '127.0.0.1:9306';    // Database host name
-                $option['prefix']   = '';             // Database prefix (may be empty)
+                $option['driver']   = 'mysql';
+                $option['host']     = '127.0.0.1:9306';
+                $option['prefix']   = '';
+                break;
 
-            break;
             case 'joomla':
-                $option['driver']   = 'mysqli';            // Database driver name
-                $option['host']     = Factory::getApplication()->get('host');    // Database host name
-                $option['user']     = Factory::getApplication()->get('user');       // User for database authentication
-                $option['password'] = Factory::getApplication()->get('password');   // Password for database authentication
-                $option['database'] = Factory::getApplication()->get('db');     // Database name
-                $option['prefix']   = Factory::getApplication()->get('dbprefix');             // Database prefix (may be empty)
-            break;
+                $option['driver']   = 'mysqli';
+                $option['host']     = Factory::getApplication()->get('host');
+                $option['user']     = Factory::getApplication()->get('user');
+                $option['password'] = Factory::getApplication()->get('password');
+                $option['database'] = Factory::getApplication()->get('db');
+                $option['prefix']   = Factory::getApplication()->get('dbprefix');
+                break;
+        }
+        return $option;
+    }
 
-        }     
-    return $option;
-       
+    public static function sanitizeSphinxQuery(string $q): string
+    {
+        $q = preg_replace('/[^\p{L}\d\s]/u', ' ', $q);
+        $q = str_replace("'", ' ', $q);
+        return trim($q);
     }
 }
