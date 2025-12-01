@@ -16,7 +16,7 @@ class ZSearchSphinxHelper
 	if (!$input->exists('search_box')) {
 	    return [];
 	}
-        $obchodParam = $params->get('obchodParam', '2', 'STRING');
+        $obchodParam = $params->get('obchod', '2', 'STRING');
 	$query       = $input->get('search_box', '', 'STRING');
 	$znacky      = $input->get('znacky_search', '', 'STRING');
 	$sphinxTable = $params->get('sphinx_table', '', 'STRING');
@@ -45,7 +45,6 @@ class ZSearchSphinxHelper
 	$user     = Factory::getApplication()->getIdentity();
 	$userId   = isset($user->id) ? (int)$user->id : 0;
 	$shopperGroupId  = $this->getUserGroup($dbJoomla, $userId, $obchodParam);
-
 	$products = $this->fetchProducts($dbJoomla, $ids, $shopperGroupId);
 
 	$docs = [];
@@ -152,23 +151,22 @@ class ZSearchSphinxHelper
 	    return null;
 	}
     }
-
+    
     private function getUserGroup($db, int $userId, string $obchodParam): int
     {
-	if ($obchodParam === '2') {
-	    return 0; // maloobchod
+	if ($obchodParam === '1') {
+	    $qGroup = $db->getQuery(true)
+		    ->select($db->quoteName('virtuemart_shoppergroup_id'))
+		    ->from($db->quoteName('#__virtuemart_vmuser_shoppergroups'))
+		    ->where($db->quoteName('virtuemart_user_id') . '= :userid')
+		    ->bind(':userid', $userId);
+
+	    $db->setQuery($qGroup);
+	    $groupRow = $db->loadRow();
+	    return $groupRow[0] ?? 5; // Default shopper group if not found
+	} else {
+	    return 0; // Default for maloobchod
 	}
-
-	$q = $db->getQuery(true)
-	    ->select('virtuemart_shoppergroup_id')
-	    ->from('#__virtuemart_vmuser_shoppergroups')
-	    ->where('virtuemart_user_id = :uid')
-	    ->bind(':uid', $userId);
-
-	$db->setQuery($q);
-	$row = $db->loadRow();
-
-	return $row[0] ?? 5; // fallback
     }
 
     private function fetchProducts($db, array $ids, int $shopperGroupId): array
