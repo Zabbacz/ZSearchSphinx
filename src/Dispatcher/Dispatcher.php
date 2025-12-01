@@ -19,10 +19,9 @@ class Dispatcher extends AbstractModuleDispatcher implements HelperFactoryAwareI
 
     protected function getLayoutData(): array
     {
+	$params = new Registry($this->module->params);
         $data = parent::getLayoutData();
-        
-        
-        $data['docs'] = $this->getHelperFactory()->getHelper('ZSearchSphinxHelper')->getSearch();
+        $data['docs'] = $this->getHelperFactory()->getHelper('ZSearchSphinxHelper')->getSearch($params);
     return $data;
 
     }
