@@ -103,7 +103,7 @@ if (!is_array($docs)) {
                         <div class="vm-product-media-container text-center d-flex flex-column justify-content-center" style="min-height:300px">
                             <form method="post" class="product js-recalculate" action="#">
                                 <div class="main-image">
-                                    <div class="product-details-imege-handler">
+                                    <div class="product-thumnails-image-handler">
                                         <img src="<?= htmlspecialchars($image_path, ENT_QUOTES, 'UTF-8') ?>" alt="<?= $product_name ?>" />
                                     </div>
                                     <div class="clear"></div>
