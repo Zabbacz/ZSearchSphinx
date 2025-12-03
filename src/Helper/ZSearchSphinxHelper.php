@@ -254,6 +254,7 @@ class ZSearchSphinxHelper
 	    'file_url'                => $row['file_url'],
 	    'min_order_level'         => $params['min_order_level'] ?? 1,
 	    'step_order_level'        => $params['step_order_level'] ?? 1,
+	    'max_order_level'	      => $params['max_order_level'] ?? null,
 	    's_dph'                   => $sdph,
 	    'manufacturer'            => $row['mf_name'],
 	    'manufacturer_id'         => $row['virtuemart_manufacturer_id'],
@@ -286,29 +287,36 @@ class ZSearchSphinxHelper
         return is_array($manufacturers) ? $manufacturers : [];
     }
 
-    public static function getBaleni(?string $vstup): array
+    public static function getBaleni($input)
     {
-        mb_internal_encoding("UTF-8");
-        $vystup = [];
-        if ($vstup) {
-            $delka = mb_strlen($vstup);
-            $podretezec = mb_strpos($vstup, ':');
-            $nahrad = [' ' => ''];
-            $vstupZprac = mb_substr(strtr($vstup, $nahrad), $podretezec, $delka);
-            $cisla = explode('|', $vstupZprac);
-            foreach ($cisla as $cislo) {
-                $parts = explode('=', str_replace('"', '', $cislo), 2);
-                if (isset($parts[1])) {
-                    $key = $parts[0];
-                    $value = $parts[1];
-                    $vystup[$key] = $value;
-                }
-            }
-        } else {
-            $vystup['min_order_level'] = '1';
-            $vystup['step_order_level'] = '1';
-        }
-        return $vystup;
+	$defaults = [
+	    'min_order_level'  => 1,
+	    'step_order_level' => 1,
+	    'max_order_level'  => null
+	];
+
+	if (!$input) {
+	    return $defaults;
+	}
+
+	$out = [];
+
+	// min_order_level
+	if (preg_match('/min_order_level="([^"]*)"/', $input, $m)) {
+	    $out['min_order_level'] = ($m[1] !== '') ? (int)$m[1] : 1;
+	}
+
+	// step_order_level
+	if (preg_match('/step_order_level="([^"]*)"/', $input, $m)) {
+	    $out['step_order_level'] = ($m[1] !== '') ? (int)$m[1] : 1;
+	}
+
+	// max_order_level
+	if (preg_match('/max_order_level="([^"]*)"/', $input, $m)) {
+	    $out['max_order_level'] = ($m[1] !== '') ? (int)$m[1] : null;
+	}
+	
+	return array_merge($defaults, $out);
     }
 
     public static function pripojDatabazi(string $database): array

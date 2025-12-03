@@ -134,13 +134,15 @@ if (!is_array($docs)) {
 			    if(($obchodParam ==='1' AND (Factory::getUser()->groups[(int)$velkoobchod]===(int)$velkoobchod)) OR $obchodParam ==='2') {
                                 $minOrder = htmlspecialchars($doc['min_order_level'] ?? '1', ENT_QUOTES, 'UTF-8');
                                 $stepOrder = htmlspecialchars($doc['step_order_level'] ?? '1', ENT_QUOTES, 'UTF-8');
+				$maxOrder = htmlspecialchars($doc['max_order_level'] ?? '', ENT_QUOTES, 'UTF-8');
                         ?>
 				<input class="quantity-input"
 				    type="number"
 				    name="quantity[]"
 				    value="<?php echo $minOrder; ?>"
 				    min="<?php echo $minOrder; ?>"
-				    step="<?php echo $stepOrder; ?>" />
+				    step="<?php echo $stepOrder; ?>" 
+				    max="<?php echo $maxOrder; ?>" />
 
 				<input type="submit"
 				    name="addtocart"
